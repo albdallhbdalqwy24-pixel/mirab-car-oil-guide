@@ -6,20 +6,20 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
 
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -42,23 +42,21 @@ jobs:
         env:
           GITHUB_ACTIONS: true
 
-      - name: Publish dist to gh-pages
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          rm -rf /tmp/mirab-gh-pages
-          git fetch origin gh-pages:gh-pages || true
-          if git show-ref --verify --quiet refs/remotes/origin/gh-pages; then
-            git worktree add /tmp/mirab-gh-pages gh-pages
-          else
-            git worktree add --orphan -b gh-pages /tmp/mirab-gh-pages
-          fi
-          find /tmp/mirab-gh-pages -mindepth 1 -maxdepth 1 -not -name .git -exec rm -rf {} +
-          cp -R dist/. /tmp/mirab-gh-pages/
-          touch /tmp/mirab-gh-pages/.nojekyll
-          cd /tmp/mirab-gh-pages
-          git add --all
-          git commit -m "نشر مِرآب على GitHub Pages" || true
-          git push origin gh-pages
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
